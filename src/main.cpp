@@ -11,6 +11,7 @@
 
 // for convenience
 using json = nlohmann::json;
+const double Lf = 2.67;
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -91,6 +92,15 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double steer_angle = j[1]["steering_angle"];
+          double throttle = j[1]["throttle"];
+
+          // predict state in 100ms
+          double latency = 0.1;
+          px = px + v * cos(psi) * latency;
+          py = py + v * sin(psi) * latency;
+          psi = psi - v * steer_angle / Lf * latency;
+          v = v + throttle * latency;
 
           // convert global coordinates to car local coordinates
           vector<double> waypoints_x;
@@ -109,9 +119,7 @@ int main() {
           Eigen::Map<Eigen::VectorXd> Ptsy(ptry, 6);
 
           auto coeffs = polyfit(Ptsx, Ptsy, 3);
-          // The cross track error is calculated by evaluating at polynomial at x, f(x)
-          // and subtracting y.
-          // now in car coordinates: px = py = 0
+
           double cte = polyeval(coeffs, 0);
           // Due to the sign starting at 0, the orientation error is -f'(x).
           // derivative of coeffs[0] + coeffs[1] * x + coeffs[2] * x * x
@@ -130,7 +138,7 @@ int main() {
           Eigen::VectorXd state(6);
           state << 0, 0, 0, v, cte, epsi;
           auto vars = mpc.Solve(state, coeffs);
-          double steer_value = vars[0];
+          double steer_value = -vars[0];
           double throttle_value = vars[1];
 
           json msgJson;

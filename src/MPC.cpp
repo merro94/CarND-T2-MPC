@@ -52,19 +52,18 @@ class FG_eval {
     fg[0] = 0;
     // The part of the cost based on the reference state.
     for (int t = 0; t < N; t++) {
-      fg[0] += CppAD::pow(vars[cte_start + t] , 2);
-      fg[0] += CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 20*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 20*CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
     // Minimize the use of actuators.
     for (int t = 0; t < N - 1; t++) {
-      fg[0] += CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += CppAD::pow(vars[a_start + t], 2);
-      //fg[0] += 700*CppAD::pow(vars[delta_start + t] * vars[v_start + t], 2);
+      fg[0] += 5*CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 5*CppAD::pow(vars[a_start + t], 2);
     }
     // Minimize the value gap between sequential actuations.
     for (int t = 0; t < N - 2; t++) {
-      fg[0] += CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 9000*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
       fg[0] += CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
@@ -98,13 +97,9 @@ class FG_eval {
       AD<double> epsi0 = vars[epsi_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
       AD<double> delta0 = vars[delta_start + t - 1];
-      // TODO: latency check
-      if (t > 2) {   // use previous actuations (to account for latency)
-        a0 = vars[a_start + t - 2];
-        delta0 = vars[delta_start + t - 2];
-      }
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2) + coeffs[3] * CppAD::pow(x0, 3);
-      AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * CppAD::pow(x0, 2));
+
+      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * x0 * x0 + coeffs[3] * x0 * x0 * x0;
+      AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * x0 * x0);
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -117,7 +112,7 @@ class FG_eval {
       int ind = 1;
       fg[ind + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[ind + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-      fg[ind + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt);
+      fg[ind + psi_start + t] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
       fg[ind + v_start + t] = v1 - (v0 + a0 * dt);
       fg[ind + cte_start + t] =
           cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
@@ -252,12 +247,13 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   //
   // {...} is shorthand for creating a vector, so auto x1 = {1.0,2.0}
   // creates a 2 element double vector.
+
   vector<double> result;
   result.push_back(solution.x[delta_start]);
   result.push_back(solution.x[a_start]);
   for (auto i = 0; i < N - 1; i++) {
-    result.push_back(solution.x[x_start + 1 + i]);
-    result.push_back(solution.x[y_start + 1 + i]);
+    result.push_back(solution.x[x_start + i]);
+    result.push_back(solution.x[y_start + i]);
   }
   return result;
 }
